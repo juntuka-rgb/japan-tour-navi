@@ -3,10 +3,9 @@ import googlemaps
 import folium
 import streamlit.components.v1 as components
 
-# --- 0. カウンター機能（認証欲求・モチベーション維持用） ---
+# --- 0. カウンター機能 ---
 @st.cache_resource
 def get_counter():
-    # アプリ起動中の累計回数を保持する簡易カウンター
     return {"count": 0}
 
 counter = get_counter()
@@ -27,7 +26,7 @@ def check_password():
         return False
     return True
 
-# --- 2. 経路算出ロジック（複数経由地対応・V字防止） ---
+# --- 2. 経路算出ロジック ---
 def find_jun_goal_no_detour(gmaps, start_point, waypoints, target_km, mode="bicycling"):
     active_waypoints = [w for w in waypoints if w.strip()]
     if not start_point.strip():
@@ -83,12 +82,11 @@ def clear_text():
 
 # --- 4. メイン UI ---
 def main():
-    st.set_page_config(page_title="日本一周NAVI v1.1", layout="centered")
-    st.title("🚲 日本一周・ルートビルダー v1.1")
+    st.set_page_config(page_title="日本一周NAVI v1.2", layout="centered")
+    st.title("🚲 日本一周・ルートビルダー v1.2")
     
     gmaps = googlemaps.Client(key=st.secrets["GOOGLE_MAPS_API_KEY"])
 
-    # セッション状態の初期化
     if "start_node" not in st.session_state:
         st.session_state["start_node"] = ""
     if "w1" not in st.session_state:
@@ -126,22 +124,18 @@ def main():
                 goal_coords, start_coords, error = find_jun_goal_no_detour(gmaps, start_node, waypoints, target_km)
                 
                 if goal_coords:
-                    # 計算成功時にカウンターを +1 する
                     counter["count"] += 1
-                    
                     rev = gmaps.reverse_geocode((goal_coords['lat'], goal_coords['lng']), language='ja')
                     address = rev[0]['formatted_address'] if rev else "住所不明"
                     
                     st.success(f"✨ {target_km}km地点を特定しました！")
                     
-                    d_lat, d_lng = goal_coords['lat'], goal_coords['lng']                
-                    # 出発地と目的地を正しくGoogleマップに渡すための修正版URL
-                    maps_url = (
-                        f"https://www.google.com/maps/dir/?api=1&"
-                        f"origin={start_node}&"
-                        f"destination={d_lat},{d_lng}&"
-                        f"travelmode=bicycling"
-                    )                    col1, col2 = st.columns([2, 1])
+                    d_lat, d_lng = goal_coords['lat'], goal_coords['lng']
+                    
+                    # 出発地と目的地を確実にGoogleマップへ引き継ぐURL（修正版）
+                    maps_url = f"https://www.google.com/maps/dir/?api=1&origin={start_node}&destination={d_lat},{d_lng}&travelmode=bicycling"
+                    
+                    col1, col2 = st.columns([2, 1])
                     with col1:
                         st.write(f"**本日の到達地点の目安:**\n{address}")
                     with col2:
@@ -152,12 +146,4 @@ def main():
                     folium.Marker([d_lat, d_lng], tooltip=f"{target_km}km地点", icon=folium.Icon(color='blue', icon='bicycle', prefix='fa')).add_to(m)
                     components.html(m._repr_html_(), height=500)
                 else:
-                    st.error(error)
-
-    # --- フッター（カウンター表示） ---
-    st.write("---")
-    st.caption(f"🏁 これまでの累計ルート算出回数: {counter['count']} 回")
-    st.caption("※このカウンターはアプリの起動期間中の累計を表示しています。")
-
-if check_password():
-    main()
+                    st.error
