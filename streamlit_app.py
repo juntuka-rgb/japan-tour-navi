@@ -134,13 +134,14 @@ def main():
                     
                     st.success(f"✨ {target_km}km地点を特定しました！")
                     
-                    d_lat, d_lng = goal_coords['lat'], goal_coords['lng']
-                    
+                    d_lat, d_lng = goal_coords['lat'], goal_coords['lng']                
+                    # 出発地と目的地を正しくGoogleマップに渡すための修正版URL
                     maps_url = (
-                        f"https://www.google.com/maps/dir/?api=1&?origin={start_node}&destination={d_lat},{d_lng}&travelmode=bicycling"
-                    )
-                    
-                    col1, col2 = st.columns([2, 1])
+                        f"https://www.google.com/maps/dir/?api=1&"
+                        f"origin={start_node}&"
+                        f"destination={d_lat},{d_lng}&"
+                        f"travelmode=bicycling"
+                    )                    col1, col2 = st.columns([2, 1])
                     with col1:
                         st.write(f"**本日の到達地点の目安:**\n{address}")
                     with col2:
