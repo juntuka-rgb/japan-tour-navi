@@ -18,6 +18,7 @@ def check_password():
             del st.session_state["password"]
         else:
             st.session_state["password_correct"] = False
+    
     if "password_correct" not in st.session_state:
         st.text_input("合言葉を入力してください", type="password", on_change=password_entered, key="password")
         return False
@@ -132,7 +133,7 @@ def main():
                     
                     d_lat, d_lng = goal_coords['lat'], goal_coords['lng']
                     
-                    # 出発地と目的地を確実にGoogleマップへ引き継ぐURL（修正版）
+                    # 出発地と目的地を確実にGoogleマップへ引き継ぐURL
                     maps_url = f"https://www.google.com/maps/dir/?api=1&origin={start_node}&destination={d_lat},{d_lng}&travelmode=bicycling"
                     
                     col1, col2 = st.columns([2, 1])
@@ -146,4 +147,11 @@ def main():
                     folium.Marker([d_lat, d_lng], tooltip=f"{target_km}km地点", icon=folium.Icon(color='blue', icon='bicycle', prefix='fa')).add_to(m)
                     components.html(m._repr_html_(), height=500)
                 else:
-                    st.error
+                    st.error(error)
+
+    st.write("---")
+    st.caption(f"🏁 これまでの累計ルート算出回数: {counter['count']} 回")
+
+# セキュリティチェックを通った場合のみメイン画面を表示
+if check_password():
+    main()
