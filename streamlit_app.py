@@ -3,6 +3,14 @@ import googlemaps
 import folium
 import streamlit.components.v1 as components
 
+# --- 0. カウンター機能（認証欲求・モチベーション維持用） ---
+@st.cache_resource
+def get_counter():
+    # アプリ起動中の累計回数を保持する簡易カウンター
+    return {"count": 0}
+
+counter = get_counter()
+
 # --- 1. セキュリティ設定 ---
 def check_password():
     def password_entered():
@@ -75,8 +83,8 @@ def clear_text():
 
 # --- 4. メイン UI ---
 def main():
-    st.set_page_config(page_title="日本一周NAVI v1.0", layout="centered")
-    st.title("🚲 日本一周・ルートビルダー v1.0")
+    st.set_page_config(page_title="日本一周NAVI v1.1", layout="centered")
+    st.title("🚲 日本一周・ルートビルダー v1.1")
     
     gmaps = googlemaps.Client(key=st.secrets["GOOGLE_MAPS_API_KEY"])
 
@@ -94,7 +102,6 @@ def main():
         st.header("旅の現在地")
         start_node = st.text_input("出発地", key="start_node")
         
-        # 走行予定距離の設定（デフォルト80km）
         st.write("---")
         target_km = st.number_input("本日の走行予定距離 (km)", min_value=1, max_value=300, value=80)
         
@@ -119,6 +126,9 @@ def main():
                 goal_coords, start_coords, error = find_jun_goal_no_detour(gmaps, start_node, waypoints, target_km)
                 
                 if goal_coords:
+                    # 計算成功時にカウンターを +1 する
+                    counter["count"] += 1
+                    
                     rev = gmaps.reverse_geocode((goal_coords['lat'], goal_coords['lng']), language='ja')
                     address = rev[0]['formatted_address'] if rev else "住所不明"
                     
@@ -127,7 +137,7 @@ def main():
                     d_lat, d_lng = goal_coords['lat'], goal_coords['lng']
                     
                     maps_url = (
-                        f"https://www.google.com/maps/dir/?api=1&origin={start_node}&destination={d_lat},{d_lng}&travelmode=bicycling"
+                        f"https://www.google.com/maps/dir/?api=1&?origin={start_node}&destination={d_lat},{d_lng}&travelmode=bicycling"
                     )
                     
                     col1, col2 = st.columns([2, 1])
@@ -142,6 +152,11 @@ def main():
                     components.html(m._repr_html_(), height=500)
                 else:
                     st.error(error)
+
+    # --- フッター（カウンター表示） ---
+    st.write("---")
+    st.caption(f"🏁 これまでの累計ルート算出回数: {counter['count']} 回")
+    st.caption("※このカウンターはアプリの起動期間中の累計を表示しています。")
 
 if check_password():
     main()
