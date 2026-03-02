@@ -1,16 +1,15 @@
 import streamlit as st
 import googlemaps
 import folium
+import pandas as pd
 import streamlit.components.v1 as components
 
-# --- 0. カウンター機能 ---
 @st.cache_resource
 def get_counter():
     return {"count": 0}
 
 counter = get_counter()
 
-# --- 1. セキュリティ設定 ---
 def check_password():
     def password_entered():
         if st.session_state["password"] == st.secrets["APP_PASSWORD"]:
@@ -27,131 +26,116 @@ def check_password():
         return False
     return True
 
-# --- 2. 経路算出ロジック ---
+def get_elevation_info(gmaps, path_coords, total_dist_meters):
+    if not path_coords or total_dist_meters <= 0:
+        return [0], 0, 0, 0, 0
+    try:
+        samples = 30
+        elevation_data = gmaps.elevation_along_path(path_coords, samples)
+        elevations = [item['elevation'] for item in elevation_data]
+        total_ascent = 0
+        slopes = []
+        dist_step = total_dist_meters / (len(elevations) - 1)
+        for i in range(len(elevations) - 1):
+            diff = elevations[i+1] - elevations[i]
+            if diff > 0:
+                total_ascent += diff
+                s = (diff / dist_step) * 100
+                slopes.append(s)
+        max_elev = max(elevations)
+        avg_slope = (total_ascent / total_dist_meters) * 100
+        max_slope = max(slopes) if slopes else 0
+        return elevations, round(total_ascent), round(max_elev), round(avg_slope, 1), round(max_slope, 1)
+    except:
+        return [0], 0, 0, 0, 0
+
 def find_jun_goal_no_detour(gmaps, start_point, waypoints, target_km, mode="bicycling"):
     active_waypoints = [w for w in waypoints if w.strip()]
     if not start_point.strip():
-        return None, None, "出発地を入力してください。"
-    if not active_waypoints:
-        return None, None, "経由地を少なくとも1つ入力してください。"
-    
-    dest = active_waypoints[-1]
-    via = active_waypoints[:-1]
-
-    directions = gmaps.directions(
-        origin=start_point,
-        destination=dest,
-        waypoints=via,
-        mode=mode,
-        region="jp",
-        language="ja"
-    )
-
-    if not directions and mode == "bicycling":
-        directions = gmaps.directions(
-            origin=start_point,
-            destination=dest,
-            waypoints=via,
-            mode="driving",
-            avoid=["tolls", "highways", "ferries"],
-            region="jp"
-        )
-
+        return None, None, [0], 0, 0, 0, 0, 0, "出発地を入力してください。"
+    dest = active_waypoints[-1] if active_waypoints else start_point
+    via = active_waypoints[:-1] if active_waypoints else []
+    try:
+        directions = gmaps.directions(origin=start_point, destination=dest, waypoints=via, mode=mode, region="jp", language="ja")
+        if not directions and mode == "bicycling":
+            directions = gmaps.directions(origin=start_point, destination=dest, waypoints=via, mode="driving", avoid=["tolls", "highways", "ferries"], region="jp")
+    except Exception as e:
+        return None, None, [0], 0, 0, 0, 0, 0, f"API Error: {str(e)}"
     if not directions:
-        return None, None, "指定された経由地を結ぶルートが見つかりませんでした。"
-
+        return None, None, [0], 0, 0, 0, 0, 0, "No Route Found"
     target_meters = target_km * 1000 
-    accumulated_meters = 0
+    acc_meters = 0
     route = directions[0]
     start_coords = route['legs'][0]['start_location']
-    
+    path_coords = []
+    found_goal = None
+    real_dist = 0
     for leg in route['legs']:
         for step in leg['steps']:
             step_dist = step['distance']['value']
-            if accumulated_meters + step_dist >= target_meters:
-                return step['end_location'], start_coords, None
-            accumulated_meters += step_dist
-            
-    return route['legs'][-1]['end_location'], start_coords, f"※{target_km}kmに届かず、{accumulated_meters/1000:.1f}km地点を表示します。"
+            path_coords.append(step['start_location'])
+            if not found_goal and acc_meters + step_dist >= target_meters:
+                found_goal = step['end_location']
+                path_coords.append(found_goal)
+                real_dist = acc_meters + step_dist
+                break
+            acc_meters += step_dist
+        if found_goal: break
+    if not found_goal:
+        found_goal = route['legs'][-1]['end_location']
+        path_coords.append(found_goal)
+        real_dist = acc_meters
+    elev_list, ascent, max_e, avg_s, max_s = get_elevation_info(gmaps, path_coords, real_dist)
+    return found_goal, start_coords, elev_list, ascent, max_e, avg_s, max_s, real_dist, None
 
-# --- 3. 一括消去用関数 ---
-def clear_text():
-    st.session_state["start_node"] = ""
-    st.session_state["w1"] = ""
-    st.session_state["w2"] = ""
-    st.session_state["w3"] = ""
-
-# --- 4. メイン UI ---
 def main():
-    st.set_page_config(page_title="日本一周NAVI v1.2", layout="centered")
-    st.title("🚲 日本一周・ルートビルダー v1.2")
-    
+    st.set_page_config(page_title="日本一周NAVI v2.12", layout="centered")
+    st.title("🚲 日本一周・ルートビルダー v2.12")
     gmaps = googlemaps.Client(key=st.secrets["GOOGLE_MAPS_API_KEY"])
-
-    if "start_node" not in st.session_state:
-        st.session_state["start_node"] = ""
-    if "w1" not in st.session_state:
-        st.session_state["w1"] = ""
-    if "w2" not in st.session_state:
-        st.session_state["w2"] = ""
-    if "w3" not in st.session_state:
-        st.session_state["w3"] = ""
-
+    for k in ["start_node", "w1", "w2", "w3"]:
+        if k not in st.session_state: st.session_state[k] = ""
     with st.sidebar:
         st.header("旅の現在地")
         start_node = st.text_input("出発地", key="start_node")
-        
-        st.write("---")
-        target_km = st.number_input("本日の走行予定距離 (km)", min_value=1, max_value=300, value=80)
-        
-        st.write("---")
-        st.header("経由地（進む順に）")
+        target_km = st.number_input("予定距離 (km)", min_value=1, max_value=300, value=80)
+        st.header("経由地")
         w1 = st.text_input("経由地1", key="w1")
         w2 = st.text_input("経由地2", key="w2")
         w3 = st.text_input("最終目的地方面", key="w3")
-        
-        st.write("---")
-        st.button("入力内容をすべて消去", on_click=clear_text)
-        
-        st.write("---")
+        if st.button("消去"):
+            for k in ["start_node","w1","w2","w3"]: st.session_state[k] = ""
+            st.rerun()
         run_btn = st.button(f"今日の{target_km}km地点を計算")
-
     if run_btn:
-        if not start_node:
-            st.error("出発地を入力してください。")
+        if not start_node: st.error("Please enter start point.")
         else:
-            with st.spinner(f"道なりの{target_km}km地点を特定中..."):
-                waypoints = [w1, w2, w3]
-                goal_coords, start_coords, error = find_jun_goal_no_detour(gmaps, start_node, waypoints, target_km)
-                
-                if goal_coords:
+            with st.spinner("Analyzing..."):
+                res = find_jun_goal_no_detour(gmaps, start_node, [w1, w2, w3], target_km)
+                goal, start, elev_list, ascent, max_e, avg_s, max_s, dist, err = res
+                if err: st.error(err)
+                elif goal:
                     counter["count"] += 1
-                    rev = gmaps.reverse_geocode((goal_coords['lat'], goal_coords['lng']), language='ja')
-                    address = rev[0]['formatted_address'] if rev else "住所不明"
-                    
                     st.success(f"✨ {target_km}km地点を特定しました！")
-                    
-                    d_lat, d_lng = goal_coords['lat'], goal_coords['lng']
-                    
-                    # 出発地と目的地を確実にGoogleマップへ引き継ぐURL
-                    maps_url = f"https://www.google.com/maps/dir/?api=1&origin={start_node}&destination={d_lat},{d_lng}&travelmode=bicycling"
-                    
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("⛰️ 獲得標高", f"{ascent} m")
+                    c2.metric("🔝 最高地点", f"{max_e} m")
+                    c3.metric("📈 平均斜度", f"{avg_s} %")
+                    c4.metric("🔥 最大斜度", f"{max_s} %")
+                    if max_s >= 8.0: st.error(f"🚨 警告：最大斜度 {max_s}%。激坂です。")
+                    elif avg_s >= 1.5: st.warning(f"⚠️ 平均斜度 {avg_s}%：過酷です。")
+                    st.area_chart(pd.DataFrame(elev_list, columns=["標高(m)"]))
+                    d_lat, d_lng = goal['lat'], goal['lng']
+                    m_url = f"https://www.google.com/maps/dir/?api=1&origin={start_node}&destination={d_lat},{d_lng}&travelmode=bicycling"
                     col1, col2 = st.columns([2, 1])
                     with col1:
-                        st.write(f"**本日の到達地点の目安:**\n{address}")
-                    with col2:
-                        st.link_button("🚀 マップでナビ", maps_url)
-
+                        rev = gmaps.reverse_geocode((d_lat, d_lng), language='ja')
+                        st.write(f"**到達地点:**\n{rev[0]['formatted_address'] if rev else '不明'}")
+                    with col2: st.link_button("🚀 マップでナビ", m_url)
                     m = folium.Map(location=[d_lat, d_lng], zoom_start=11)
-                    folium.Marker([start_coords['lat'], start_coords['lng']], tooltip="出発地", icon=folium.Icon(color='red')).add_to(m)
-                    folium.Marker([d_lat, d_lng], tooltip=f"{target_km}km地点", icon=folium.Icon(color='blue', icon='bicycle', prefix='fa')).add_to(m)
+                    folium.Marker([start['lat'], start['lng']], icon=folium.Icon(color='red')).add_to(m)
+                    folium.Marker([d_lat, d_lng], icon=folium.Icon(color='blue', icon='bicycle', prefix='fa')).add_to(m)
                     components.html(m._repr_html_(), height=500)
-                else:
-                    st.error(error)
-
     st.write("---")
-    st.caption(f"🏁 これまでの累計ルート算出回数: {counter['count']} 回")
+    st.caption(f"🏁 累計算出回数: {counter['count']} 回")
 
-# セキュリティチェックを通った場合のみメイン画面を表示
-if check_password():
-    main()
+if check_password(): main()
