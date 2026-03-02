@@ -74,19 +74,3 @@ def find_jun_goal_no_detour(gmaps, start_point, waypoints, target_km, mode="bicy
         for step in leg['steps']:
             step_dist = step['distance']['value']
             path_coords.append(step['start_location'])
-            if not found_goal and acc_meters + step_dist >= target_meters:
-                found_goal = step['end_location']
-                path_coords.append(found_goal)
-                real_dist = acc_meters + step_dist
-                break
-            acc_meters += step_dist
-        if found_goal: break
-    if not found_goal:
-        found_goal = route['legs'][-1]['end_location']
-        path_coords.append(found_goal)
-        real_dist = acc_meters
-    elev_list, ascent, max_e, avg_s, max_s = get_elevation_info(gmaps, path_coords, real_dist)
-    return found_goal, start_coords, elev_list, ascent, max_e, avg_s, max_s, real_dist, None
-
-def main():
-    st.set_page_config(page_title="日本一周NAVI v2.13", layout
