@@ -74,3 +74,53 @@ def find_jun_goal_no_detour(gmaps, start_point, waypoints, target_km, mode="bicy
         for step in leg['steps']:
             step_dist = step['distance']['value']
             path_coords.append(step['start_location'])
+            if not found_goal and acc_meters + step_dist >= target_meters:
+                found_goal = step['end_location']
+                path_coords.append(found_goal)
+                real_dist = acc_meters + step_dist
+                break
+            acc_meters += step_dist
+        if found_goal: break
+    if not found_goal:
+        found_goal = route['legs'][-1]['end_location']
+        path_coords.append(found_goal)
+        real_dist = acc_meters
+    elev_list, ascent, max_e, avg_s, max_s = get_elevation_info(gmaps, path_coords, real_dist)
+    return found_goal, start_coords, elev_list, ascent, max_e, avg_s, max_s, real_dist, None
+
+def main():
+    st.set_page_config(page_title="日本一周NAVI v2.13", layout="centered")
+    st.title("🚲 日本一周・ルートビルダー v2.13")
+    gmaps = googlemaps.Client(key=st.secrets["GOOGLE_MAPS_API_KEY"])
+
+    # 消去ボタンとそれに付随するロジックを完全に削除しました
+
+    with st.sidebar:
+        st.header("旅の現在地")
+        # keyを削除し、純粋な入力欄に戻しました
+        start_node = st.text_input("出発地")
+        target_km = st.number_input("予定距離 (km)", min_value=1, max_value=300, value=80)
+        st.header("経由地")
+        w1 = st.text_input("経由地1")
+        w2 = st.text_input("経由地2")
+        w3 = st.text_input("最終目的地方面")
+        st.write("---")
+        run_btn = st.button(f"今日の{target_km}km地点を計算")
+
+    if run_btn:
+        if not start_node: st.error("出発地を入力してください。")
+        else:
+            with st.spinner("解析中..."):
+                res = find_jun_goal_no_detour(gmaps, start_node, [w1, w2, w3], target_km)
+                goal, start, elev_list, ascent, max_e, avg_s, max_s, dist, err = res
+                if err: st.error(err)
+                elif goal:
+                    counter["count"] += 1
+                    st.success(f"✨ {target_km}km地点を特定しました！")
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("⛰️ 獲得標高", f"{ascent} m")
+                    c2.metric("🔝 最高地点", f"{max_e} m")
+                    c3.metric("📈 平均斜度", f"{avg_s} %")
+                    c4.metric("🔥 最大斜度", f"{max_s} %")
+                    if max_s >= 8.0: st.error(f"🚨 警告：最大斜度 {max_s}%。激坂です。")
+                    elif avg_s >= 1.5: st.warning(f"⚠️ 平均斜度 {avg_
