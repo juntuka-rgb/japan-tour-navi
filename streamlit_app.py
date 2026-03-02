@@ -89,11 +89,16 @@ def find_jun_goal_no_detour(gmaps, start_point, waypoints, target_km, mode="bicy
     return found_goal, start_coords, elev_list, ascent, max_e, avg_s, max_s, real_dist, None
 
 def main():
-    st.set_page_config(page_title="日本一周NAVI v2.12", layout="centered")
-    st.title("🚲 日本一周・ルートビルダー v2.12")
+    st.set_page_config(page_title="日本一周NAVI v2.13", layout="centered")
+    st.title("🚲 日本一周・ルートビルダー v2.13")
     gmaps = googlemaps.Client(key=st.secrets["GOOGLE_MAPS_API_KEY"])
-    for k in ["start_node", "w1", "w2", "w3"]:
-        if k not in st.session_state: st.session_state[k] = ""
+
+    # 修正：消去ボタンの処理
+    if st.sidebar.button("入力内容をすべて消去"):
+        for k in ["start_node", "w1", "w2", "w3"]:
+            st.session_state[k] = ""
+        st.rerun()
+
     with st.sidebar:
         st.header("旅の現在地")
         start_node = st.text_input("出発地", key="start_node")
@@ -102,14 +107,13 @@ def main():
         w1 = st.text_input("経由地1", key="w1")
         w2 = st.text_input("経由地2", key="w2")
         w3 = st.text_input("最終目的地方面", key="w3")
-        if st.button("消去"):
-            for k in ["start_node","w1","w2","w3"]: st.session_state[k] = ""
-            st.rerun()
+        st.write("---")
         run_btn = st.button(f"今日の{target_km}km地点を計算")
+
     if run_btn:
-        if not start_node: st.error("Please enter start point.")
+        if not start_node: st.error("出発地を入力してください。")
         else:
-            with st.spinner("Analyzing..."):
+            with st.spinner("解析中..."):
                 res = find_jun_goal_no_detour(gmaps, start_node, [w1, w2, w3], target_km)
                 goal, start, elev_list, ascent, max_e, avg_s, max_s, dist, err = res
                 if err: st.error(err)
@@ -125,7 +129,7 @@ def main():
                     elif avg_s >= 1.5: st.warning(f"⚠️ 平均斜度 {avg_s}%：過酷です。")
                     st.area_chart(pd.DataFrame(elev_list, columns=["標高(m)"]))
                     d_lat, d_lng = goal['lat'], goal['lng']
-                    m_url = f"https://www.google.com/maps/dir/?api=1&origin={start_node}&destination={d_lat},{d_lng}&travelmode=bicycling"
+                    m_url = f"https://maps.google.com/?cid=422795509440853892&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQ40{start_node}&destination={d_lat},{d_lng}&travelmode=bicycling"
                     col1, col2 = st.columns([2, 1])
                     with col1:
                         rev = gmaps.reverse_geocode((d_lat, d_lng), language='ja')
