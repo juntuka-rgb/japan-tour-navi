@@ -88,35 +88,30 @@ def find_jun_goal_no_detour(gmaps, start_point, waypoints, target_km, mode="bicy
     elev_list, ascent, max_e, avg_s, max_s = get_elevation_info(gmaps, path_coords, real_dist)
     return found_goal, start_coords, elev_list, ascent, max_e, avg_s, max_s, real_dist, None
 
-# 消去処理用のコールバック関数
-def reset_inputs():
-    for k in ["start_node", "w1", "w2", "w3"]:
-        if k in st.session_state:
-            st.session_state[k] = ""
-
 def main():
     st.set_page_config(page_title="日本一周NAVI v2.13", layout="centered")
     st.title("🚲 日本一周・ルートビルダー v2.13")
     gmaps = googlemaps.Client(key=st.secrets["GOOGLE_MAPS_API_KEY"])
 
-    # 初期化：keyが存在しない場合にエラーにならないよう設定
-    for k in ["start_node", "w1", "w2", "w3"]:
-        if k not in st.session_state:
-            st.session_state[k] = ""
+    # --- 修正の要：消去機能 ---
+    # サイドバーの最上部でボタン判定を行う
+    if st.sidebar.button("入力内容をすべて消去"):
+        # セッションから入力値を削除する
+        for k in ["start_node", "w1", "w2", "w3"]:
+            if k in st.session_state:
+                del st.session_state[k]
+        # 画面を強制リロードして、各入力欄を「未入力」の初期状態に戻す
+        st.rerun()
 
     with st.sidebar:
         st.header("旅の現在地")
+        # value引数を使わず、keyだけで管理するのがStreamlitの「消去」の定石です
         start_node = st.text_input("出発地", key="start_node")
         target_km = st.number_input("予定距離 (km)", min_value=1, max_value=300, value=80)
         st.header("経由地")
         w1 = st.text_input("経由地1", key="w1")
         w2 = st.text_input("経由地2", key="w2")
         w3 = st.text_input("最終目的地方面", key="w3")
-        st.write("---")
-        
-        # 修正：on_clickを使用して安全に消去する
-        st.button("入力内容をすべて消去", on_click=reset_inputs)
-        
         st.write("---")
         run_btn = st.button(f"今日の{target_km}km地点を計算")
 
@@ -138,4 +133,8 @@ def main():
                     if max_s >= 8.0: st.error(f"🚨 警告：最大斜度 {max_s}%。激坂です。")
                     elif avg_s >= 1.5: st.warning(f"⚠️ 平均斜度 {avg_s}%：過酷です。")
                     st.area_chart(pd.DataFrame(elev_list, columns=["標高(m)"]))
-                    d_lat, d_lng = goal['lat'], goal['lng
+                    d_lat, d_lng = goal['lat'], goal['lng']
+                    m_url = f"http://maps.google.com/maps?saddr={start_node}&daddr={d_lat},{d_lng}&directionsmode=bicycling"
+                    col1, col2 = st.columns([2, 1])
+                    with col1:
+                        rev = gmaps.reverse_geocode
