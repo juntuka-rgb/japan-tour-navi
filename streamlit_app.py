@@ -93,11 +93,8 @@ def main():
     st.title("🚲 日本一周・ルートビルダー v2.13")
     gmaps = googlemaps.Client(key=st.secrets["GOOGLE_MAPS_API_KEY"])
 
-    # 消去ボタンとそれに付随するロジックを完全に削除しました
-
     with st.sidebar:
         st.header("旅の現在地")
-        # keyを削除し、純粋な入力欄に戻しました
         start_node = st.text_input("出発地")
         target_km = st.number_input("予定距離 (km)", min_value=1, max_value=300, value=80)
         st.header("経由地")
@@ -108,12 +105,14 @@ def main():
         run_btn = st.button(f"今日の{target_km}km地点を計算")
 
     if run_btn:
-        if not start_node: st.error("出発地を入力してください。")
+        if not start_node:
+            st.error("出発地を入力してください。")
         else:
             with st.spinner("解析中..."):
                 res = find_jun_goal_no_detour(gmaps, start_node, [w1, w2, w3], target_km)
                 goal, start, elev_list, ascent, max_e, avg_s, max_s, dist, err = res
-                if err: st.error(err)
+                if err:
+                    st.error(err)
                 elif goal:
                     counter["count"] += 1
                     st.success(f"✨ {target_km}km地点を特定しました！")
@@ -122,5 +121,19 @@ def main():
                     c2.metric("🔝 最高地点", f"{max_e} m")
                     c3.metric("📈 平均斜度", f"{avg_s} %")
                     c4.metric("🔥 最大斜度", f"{max_s} %")
-                    if max_s >= 8.0: st.error(f"🚨 警告：最大斜度 {max_s}%。激坂です。")
-                    elif avg_s >= 1.5: st.warning(f"⚠️ 平均斜度 {avg_
+                    
+                    if max_s >= 8.0:
+                        st.error(f"🚨 警告：最大斜度 {max_s}%。激坂です。")
+                    elif avg_s >= 1.5:
+                        st.warning(f"⚠️ 平均斜度 {avg_s}%：かなり過酷なルートです。")
+                    
+                    st.write("**標高プロファイル**")
+                    st.area_chart(pd.DataFrame(elev_list, columns=["標高(m)"]))
+
+                    d_lat, d_lng = goal['lat'], goal['lng']
+                    m_url = f"https://www.google.com/maps/dir/?api=1&origin={start_node}&destination={d_lat},{d_lng}&travelmode=bicycling"
+                    
+                    col1, col2 = st.columns([2, 1])
+                    with col1:
+                        rev = gmaps.reverse_geocode((d_lat, d_lng), language='ja')
+                        st.write(f"**到達地点:**\n{rev[0]['formatted_address'] if rev else
