@@ -115,7 +115,7 @@ def main():
                     st.error(err)
                 elif goal:
                     counter["count"] += 1
-                    st.success(f"✨ {target_km}km地点を特定しました！")
+                    st.success(f"特定完了！")
                     c1, c2, c3, c4 = st.columns(4)
                     c1.metric("⛰️ 獲得標高", f"{ascent} m")
                     c2.metric("🔝 最高地点", f"{max_e} m")
@@ -125,7 +125,7 @@ def main():
                     if max_s >= 8.0:
                         st.error(f"🚨 警告：最大斜度 {max_s}%。激坂です。")
                     elif avg_s >= 1.5:
-                        st.warning(f"⚠️ 平均斜度 {avg_s}%：かなり過酷なルートです。")
+                        st.warning(f"⚠️ 平均斜度 {avg_s}%：過酷です。")
                     
                     st.write("**標高プロファイル**")
                     st.area_chart(pd.DataFrame(elev_list, columns=["標高(m)"]))
@@ -136,4 +136,18 @@ def main():
                     col1, col2 = st.columns([2, 1])
                     with col1:
                         rev = gmaps.reverse_geocode((d_lat, d_lng), language='ja')
-                        st.write(f"**到達地点:**\n{rev[0]['formatted_address'] if rev else
+                        addr = rev[0]['formatted_address'] if rev else "不明"
+                        st.write(f"**到達地点:**\n{addr}")
+                    with col2:
+                        st.link_button("🚀 マップ", m_url)
+
+                    m = folium.Map(location=[d_lat, d_lng], zoom_start=11)
+                    folium.Marker([start['lat'], start['lng']], icon=folium.Icon(color='red')).add_to(m)
+                    folium.Marker([d_lat, d_lng], icon=folium.Icon(color='blue', icon='bicycle', prefix='fa')).add_to(m)
+                    components.html(m._repr_html_(), height=500)
+
+    st.write("---")
+    st.caption(f"🏁 累計算出回数: {counter['count']} 回")
+
+if check_password():
+    main()
