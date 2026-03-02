@@ -4,12 +4,14 @@ import folium
 import pandas as pd
 import streamlit.components.v1 as components
 
+# --- 0. カウンター機能 ---
 @st.cache_resource
 def get_counter():
     return {"count": 0}
 
 counter = get_counter()
 
+# --- 1. セキュリティ設定 ---
 def check_password():
     def password_entered():
         if st.session_state["password"] == st.secrets["APP_PASSWORD"]:
@@ -26,6 +28,7 @@ def check_password():
         return False
     return True
 
+# --- 2. 標高データ詳細取得ロジック ---
 def get_elevation_info(gmaps, path_coords, total_dist_meters):
     if not path_coords or total_dist_meters <= 0:
         return [0], 0, 0, 0, 0
@@ -49,6 +52,7 @@ def get_elevation_info(gmaps, path_coords, total_dist_meters):
     except:
         return [0], 0, 0, 0, 0
 
+# --- 3. 経路算出ロジック ---
 def find_jun_goal_no_detour(gmaps, start_point, waypoints, target_km, mode="bicycling"):
     active_waypoints = [w for w in waypoints if w.strip()]
     if not start_point.strip():
@@ -88,24 +92,23 @@ def find_jun_goal_no_detour(gmaps, start_point, waypoints, target_km, mode="bicy
     elev_list, ascent, max_e, avg_s, max_s = get_elevation_info(gmaps, path_coords, real_dist)
     return found_goal, start_coords, elev_list, ascent, max_e, avg_s, max_s, real_dist, None
 
+# --- 4. メイン UI ---
 def main():
     st.set_page_config(page_title="日本一周NAVI v2.13", layout="centered")
     st.title("🚲 日本一周・ルートビルダー v2.13")
     gmaps = googlemaps.Client(key=st.secrets["GOOGLE_MAPS_API_KEY"])
 
-    # --- 修正の要：消去機能 ---
-    # サイドバーの最上部でボタン判定を行う
+    # 【修正のポイント】消去ボタンの処理
+    # ボタンが押されたら、セッションステートから入力値を削除してリロードする
     if st.sidebar.button("入力内容をすべて消去"):
-        # セッションから入力値を削除する
-        for k in ["start_node", "w1", "w2", "w3"]:
-            if k in st.session_state:
-                del st.session_state[k]
-        # 画面を強制リロードして、各入力欄を「未入力」の初期状態に戻す
+        for key in ["start_node", "w1", "w2", "w3"]:
+            if key in st.session_state:
+                del st.session_state[key]
         st.rerun()
 
     with st.sidebar:
         st.header("旅の現在地")
-        # value引数を使わず、keyだけで管理するのがStreamlitの「消去」の定石です
+        # keyを指定しつつ、プログラムからの直接代入を避ける設計に
         start_node = st.text_input("出発地", key="start_node")
         target_km = st.number_input("予定距離 (km)", min_value=1, max_value=300, value=80)
         st.header("経由地")
@@ -125,16 +128,38 @@ def main():
                 elif goal:
                     counter["count"] += 1
                     st.success(f"✨ {target_km}km地点を特定しました！")
+                    
                     c1, c2, c3, c4 = st.columns(4)
                     c1.metric("⛰️ 獲得標高", f"{ascent} m")
                     c2.metric("🔝 最高地点", f"{max_e} m")
                     c3.metric("📈 平均斜度", f"{avg_s} %")
                     c4.metric("🔥 最大斜度", f"{max_s} %")
-                    if max_s >= 8.0: st.error(f"🚨 警告：最大斜度 {max_s}%。激坂です。")
-                    elif avg_s >= 1.5: st.warning(f"⚠️ 平均斜度 {avg_s}%：過酷です。")
+                    
+                    if max_s >= 8.0:
+                        st.error(f"🚨 警告：最大斜度 {max_s}%。激坂です。")
+                    elif avg_s >= 1.5:
+                        st.warning(f"⚠️ 平均斜度 {avg_s}%：過酷です。")
+                    
+                    st.write("**標高プロファイル**")
                     st.area_chart(pd.DataFrame(elev_list, columns=["標高(m)"]))
+
                     d_lat, d_lng = goal['lat'], goal['lng']
-                    m_url = f"http://maps.google.com/maps?saddr={start_node}&daddr={d_lat},{d_lng}&directionsmode=bicycling"
+                    m_url = f"https://maps.google.com/?cid=422795509440853892&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQ40{start_node}&destination={d_lat},{d_lng}&travelmode=bicycling"
+                    
                     col1, col2 = st.columns([2, 1])
                     with col1:
-                        rev = gmaps.reverse_geocode
+                        rev = gmaps.reverse_geocode((d_lat, d_lng), language='ja')
+                        st.write(f"**到達地点:**\n{rev[0]['formatted_address'] if rev else '不明'}")
+                    with col2:
+                        st.link_button("🚀 マップでナビ", m_url)
+
+                    m = folium.Map(location=[d_lat, d_lng], zoom_start=11)
+                    folium.Marker([start['lat'], start['lng']], icon=folium.Icon(color='red')).add_to(m)
+                    folium.Marker([d_lat, d_lng], icon=folium.Icon(color='blue', icon='bicycle', prefix='fa')).add_to(m)
+                    components.html(m._repr_html_(), height=500)
+
+    st.write("---")
+    st.caption(f"🏁 累計ルート算出回数: {counter['count']} 回")
+
+if check_password():
+    main()
