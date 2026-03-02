@@ -88,7 +88,7 @@ def find_jun_goal_no_detour(gmaps, start_point, waypoints, target_km, mode="bicy
     elev_list, ascent, max_e, avg_s, max_s = get_elevation_info(gmaps, path_coords, real_dist)
     return found_goal, start_coords, elev_list, ascent, max_e, avg_s, max_s, real_dist, None
 
-# 消去処理用の関数
+# 消去処理用のコールバック関数
 def reset_inputs():
     for k in ["start_node", "w1", "w2", "w3"]:
         if k in st.session_state:
@@ -138,18 +138,4 @@ def main():
                     if max_s >= 8.0: st.error(f"🚨 警告：最大斜度 {max_s}%。激坂です。")
                     elif avg_s >= 1.5: st.warning(f"⚠️ 平均斜度 {avg_s}%：過酷です。")
                     st.area_chart(pd.DataFrame(elev_list, columns=["標高(m)"]))
-                    d_lat, d_lng = goal['lat'], goal['lng']
-                    m_url = f"https://www.google.com/maps/dir/?api=1&origin={start_node}&destination={d_lat},{d_lng}&travelmode=bicycling"
-                    col1, col2 = st.columns([2, 1])
-                    with col1:
-                        rev = gmaps.reverse_geocode((d_lat, d_lng), language='ja')
-                        st.write(f"**到達地点:**\n{rev[0]['formatted_address'] if rev else '不明'}")
-                    with col2: st.link_button("🚀 マップでナビ", m_url)
-                    m = folium.Map(location=[d_lat, d_lng], zoom_start=11)
-                    folium.Marker([start['lat'], start['lng']], icon=folium.Icon(color='red')).add_to(m)
-                    folium.Marker([d_lat, d_lng], icon=folium.Icon(color='blue', icon='bicycle', prefix='fa')).add_to(m)
-                    components.html(m._repr_html_(), height=500)
-    st.write("---")
-    st.caption(f"🏁 累計算出回数: {counter['count']} 回")
-
-if check_password(): main()
+                    d_lat, d_lng = goal['lat'], goal['lng
